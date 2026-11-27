@@ -4,7 +4,7 @@ const DEFAULT_PEOPLE = ['Adem', 'Devran', 'Engin'];
 const COLORS = ['#1d3485', '#0f8f8a', '#d9534f', '#8a5a14', '#5b3f9e', '#2f7d32', '#b04a8c'];
 
 const OWNER = 'kyarslan92@gmail.com';
-const S = { books: [], cats: [], quran: null, pass: {}, loading: {}, meta: {}, user: null, authReady: false, denied: false, access: null, people: null, sess: {}, loaded: false, anim: {}, seen: {}, demo: !window.HALKA_FIREBASE, fs: null };
+const S = { books: [], cats: [], quran: null, pass: {}, loading: {}, meta: {}, user: null, authReady: false, denied: false, access: null, people: null, sess: {}, hist: {}, loaded: false, anim: {}, seen: {}, demo: !window.HALKA_FIREBASE, fs: null };
 const $ = s => document.querySelector(s);
 const esc = v => String(v ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const ls = {
@@ -64,6 +64,10 @@ const soloPos = () => ls.get('halka-solo-pos', {});
 const pos = b => Math.max(0, Number(solo() ? soloPos()[b] : sess(b).pos) || 0);
 function setPos(b, n) { n = Math.max(0, n); if (solo()) { const P = soloPos(); P[b] = n; ls.set('halka-solo-pos', P); render(true) } else writeSess(b, { pos: n, reader: null, spin: 0, done: {} }) }
 const modeSeg = () => `<div class="seg mode" role="tablist"><button data-mode="grup" class="${solo() ? '' : 'on'}" aria-selected="${!solo()}">👥 Halka ile oku</button><button data-mode="tek" class="${solo() ? 'on' : ''}" aria-selected="${solo()}">👤 Tek başıma oku</button></div>`;
+const hist = b => S.hist[b] || {};
+// grubun geçtiği bölümlerden bu kişinin okumadıkları (kaydı olan bölümler)
+const missed = b => { const m = me(), H = hist(b), p = Math.max(0, Number(sess(b).pos) || 0); if (!m) return []; return Object.keys(H).map(Number).filter(i => i < p && Array.isArray(H[i]) && !H[i].includes(m)).sort((a, c) => a - c) };
+function markRead(b, i, names) { if (!names.length) return; const H = { ...hist(b) }; H[i] = [...new Set([...(H[i] || []), ...names])]; S.hist = { ...S.hist, [b]: H }; render(true); enqueue(() => store.addHist(b, i, names)) }
 const present = b => { const s = sess(b), all = people(); return Array.isArray(s.present) ? s.present.filter(n => all.includes(n)) : all };
 const col = n => { let h = 0; for (const c of String(n)) h = (h * 31 + c.charCodeAt(0)) >>> 0; return COLORS[h % COLORS.length] };
 const av = n => `<span class="av" style="background:${col(n)}">${esc((String(n)[0] || '?').toLocaleUpperCase('tr'))}</span>`;
@@ -97,6 +101,8 @@ function home() {
   <label class="me">Bu telefon:<select id="mesel"><option value="">Seç</option>${P.map(n => `<option${n === m ? ' selected' : ''}>${esc(n)}</option>`).join('')}</select></label></div>${rosette(P.length)}${modeSeg()}</div></div><div class="wrap">`;
   const active = Object.keys(S.sess).filter(id => sess(id).reader && getBook(id)).slice(0, 4);
   if (active.length && !solo()) h += `<section><h2>Şu an okunanlar</h2><p class="sub">Okuyucusu seçilmiş, devam eden bölümler</p>${active.map(id => `<a class="card" href="#kaynak-${esc(id)}"><div class="row"><span class="chip">${esc(getBook(id).t)}</span><span class="msg">Okuyan: ${esc(sess(id).reader)}</span></div></a>`).join('')}</section>`;
+  const miss = solo() ? [] : Object.keys(S.hist).map(id => [id, missed(id)]).filter(([id, M]) => M.length && getBook(id));
+  if (miss.length) h += `<section><h2>Eksiklerim</h2><p class="sub">Halkada olmadığın gün okunan bölümler</p>${miss.map(([id, M]) => `<a class="card" href="#telafi-${esc(id)}-${M[0]}"><div class="row"><span class="chip">${esc(getBook(id).t)}</span><span class="msg no" style="font-weight:700">❗ ${M.length} bölüm</span></div></a>`).join('')}</section>`;
   h += `<section><h2>Başlıklar</h2><p class="sub">${solo() ? 'Tek başına okuyorsun; ilerlemen sadece bu telefonda tutulur.' : 'Herkes aynı yeri açar; kaldığınız bölüm oradadır.'}</p><div class="cats">${S.cats.map((c, i) => `<a class="cat" style="background:${CATCOL[i % CATCOL.length]}" href="${c.id === 'kuran' ? '#kuran' : '#kat-' + esc(c.id)}"><h3>${esc(c.t)}</h3><p>${esc(c.a)}</p></a>`).join('')}</div></section>
   <section><a class="card" href="#notlar"><h3>Notlarım</h3><p class="msg">${Object.keys(notes()).length} not · sadece bu telefonda, kimse göremez</p></a>
   <a class="card" href="#kisiler"><div class="row"><span class="avs">${P.map(av).join('')}</span><h3 style="margin-left:4px">Kullanıcıları yönet</h3></div><p class="msg">Halkaya kişi ekle veya çıkar.</p></a></section>
@@ -114,7 +120,7 @@ function catView(c) {
     const b = b0.alias && getBook(b0.alias) ? { ...b0, id: b0.alias } : b0;
     const L = list(b.id), p = Math.min(pos(b.id), L.length), s = sess(b.id), cur = L[p];
     const st = !(b.id in S.pass) ? 'Yükleniyor…' : !L.length ? 'Metin henüz eklenmedi' : p >= L.length ? 'Tamamlandı' : s.reader && !solo() ? `Okuyan: ${s.reader}` : `${cur ? cur.idx : p + 1}. bölüm sırada`;
-    h += `<a class="book" href="#kaynak-${esc(b.id)}">${emblem(b0.ar, b0.c)}<h3>${esc(b.t)}</h3><small>${esc(b.a)}</small><small style="color:var(--lapis2);font-weight:600">${esc(st)}</small>${L.length ? `<small>${p}/${L.length} bölüm</small>` : ''}<div class="bar"><i style="width:${L.length ? Math.round(p / L.length * 100) : 0}%"></i></div></a>`
+    h += `<a class="book" href="#kaynak-${esc(b.id)}">${emblem(b0.ar, b0.c)}<h3>${esc(b.t)}</h3><small>${esc(b.a)}</small><small style="color:var(--lapis2);font-weight:600">${esc(st)}</small>${L.length ? `<small>${p}/${L.length} bölüm</small>` : ''}${!solo() && missed(b.id).length ? `<small class="no" style="font-weight:700">❗ ${missed(b.id).length} eksik bölümün var</small>` : ''}<div class="bar"><i style="width:${L.length ? Math.round(p / L.length * 100) : 0}%"></i></div></a>`
   }
   if (!items.length) h += `<div class="empty">Bu başlığın içeriği henüz eklenmedi.</div>`;
   return h + `</div></section></div>`
@@ -193,6 +199,7 @@ function sessionView(b) {
   }
   const done = s.done && typeof s.done === 'object' ? s.done : {}, allDone = pr.length > 0 && pr.every(n => done[n]);
   const noQ = B.questions === false, st = !s.reader ? 1 : allDone ? 3 : 2, an = S.anim[b];
+  h += missBanner(b);
   const stepH = (k, t) => `<div class="step ${st === k ? 'cur' : ''}"><i>${k}</i>${t}</div>`;
   h += stepH(1, 'Kimler burada?') + `<div class="people">${all.map(n => `<button data-pres="${esc(n)}" class="${pr.includes(n) ? 'on' : 'off'}" aria-pressed="${pr.includes(n)}">${av(n)}${esc(n)}</button>`).join('')}</div>`;
   h += `<div class="slot ${an ? 'spin' : ''}"><small>${s.reader || an ? 'Bugün okuyan' : 'Okuyucu henüz seçilmedi'}</small><b id="slotname">${esc(an ? an.show : (s.reader || '—'))}</b></div>`;
@@ -215,13 +222,36 @@ function sessionView(b) {
   return h
 }
 
+function missBanner(b) {
+  if (!me()) return Object.keys(hist(b)).length ? `<div class="miss">Okumadığın bölümleri görmek için ana sayfadaki <b>Bu telefon</b> kısmından adını seç.</div>` : '';
+  const M = missed(b); if (!M.length) return '';
+  return `<a class="miss" href="#telafi-${esc(b)}-${M[0]}">❗ Bu kitapta okumadığın <b>${M.length} bölüm</b> var · Şimdi oku →</a>`
+}
+function catchupView(arg) {
+  const k = arg.lastIndexOf('-'), b = arg.slice(0, k), i = +arg.slice(k + 1), B = BK()[b]; if (!B || !(i >= 0)) return home();
+  const L = list(b); need(b, i); const cur = L[i], m = me(), M = missed(b), rest = M.filter(x => x !== i);
+  let h = topbar('#kaynak-' + b, B.t) + `<div class="wrap"><section style="padding-top:18px"><div class="row"><span class="chip">${esc(B.t)}</span><span class="msg">${cur ? cur.idx + '. bölüm' : ''} · eksik okuma</span></div>`;
+  if (!cur) return h + `<div class="empty" style="margin-top:16px">Bölüm yükleniyor…</div></section></div>`;
+  const H = hist(b)[i] || [];
+  h += `<p class="msg" style="margin:8px 0 0">Halkada okuyanlar: ${H.length ? H.map(esc).join(', ') : '—'}</p>` + body(cur);
+  if (B.questions !== false && cur.q && cur.q.length) h += `<div class="step" style="margin-top:22px"><i>?</i>Kendine sor</div><ol class="qa">${cur.q.map(q => `<li>${esc(q)}</li>`).join('')}</ol>`;
+  const nk = noteKey(b, cur.idx), mine = (notes()[nk] || {}).t || '';
+  h += `<div class="step" style="margin-top:24px"><i>✎</i>Not ekle <span class="msg">(sadece sen görürsün)</span></div><textarea id="note" placeholder="Bu bölümden aklında kalan, sonra dönmek istediğin…">${esc(mine)}</textarea><button id="savenote" class="small" style="margin-top:8px">Notu kaydet</button>`;
+  h += H.includes(m) ? `<div class="empty" style="margin-top:20px">✓ Bu bölümü okudun.</div>` : `<button id="caught" class="big primary" style="margin-top:20px" ${m ? '' : 'disabled'}>✓ Okudum${rest.length ? ', sıradaki eksiğe geç' : ''}</button>`;
+  return h + `<p class="msg" style="margin:14px 0 40px">${rest.length ? `Kalan eksik: ${rest.length} bölüm` : 'Başka eksiğin yok.'}</p></section></div>`
+}
 function contentsView(b) {
   const B = BK()[b]; if (!B) return home();
   const L = list(b), p = pos(b); need(b, p);
-  let h = topbar('#kaynak-' + b, B.t) + `<div class="wrap"><section><h2>${esc(B.t)}</h2><p class="sub">${esc(B.a)} · ${L.length} bölüm · ${Math.min(p, L.length)} bölüm okundu</p><div class="list">`;
-  L.forEach((x, i) => { h += `<a href="#kaynak-${esc(b)}" data-goto="${i}"><span class="num">${x.idx}</span><span class="t">${i === p ? '<span class="here">Sıradaki bölüm</span>' : ''}<div>${esc(x.title || x.text || (x.items && x.items[0] && x.items[0].tr) || '')}</div></span><span class="${i < p ? 'ok' : 'no'}">${i < p ? '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6"><path d="M5 12l5 5 9-10"/></svg>' : ''}</span></a>` });
+  let h = topbar('#kaynak-' + b, B.t) + `<div class="wrap"><section><h2>${esc(B.t)}</h2><p class="sub">${esc(B.a)} · ${L.length} bölüm · ${Math.min(p, L.length)} bölüm okundu</p>${solo() ? '' : missBanner(b)}<div class="list">`;
+  const H = hist(b), m = me(), tick = '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6"><path d="M5 12l5 5 9-10"/></svg>';
+  L.forEach((x, i) => {
+    const rec = !solo() && Array.isArray(H[i]) ? H[i] : null, miss = rec && m && !rec.includes(m) && i < p;
+    const mark = i >= p ? '' : miss ? '<b class="bang">!</b>' : tick;
+    h += `<a href="${miss ? `#telafi-${esc(b)}-${i}` : `#kaynak-${esc(b)}`}" ${miss ? '' : `data-goto="${i}"`}><span class="num">${x.idx}</span><span class="t">${i === p ? '<span class="here">Sıradaki bölüm</span>' : ''}<div>${esc(x.title || x.text || (x.items && x.items[0] && x.items[0].tr) || '')}</div>${rec ? `<small class="who">Okuyanlar: ${rec.map(esc).join(', ') || '—'}</small>` : ''}</span><span class="${miss ? 'no' : 'ok'}">${mark}</span></a>`
+  });
   if (S.meta[b]) h += `<p class="msg">Büyük kitaplarda yalnızca kaldığınız yerin çevresindeki bölümler listelenir.</p>`;
-  return h + `</div><p class="msg" style="margin:14px 0 40px">${solo() ? 'Bir bölüme dokunursan sen o bölümden devam edersin (sadece bu telefonda).' : 'Bir bölüme dokunursan halka o bölümden devam eder (herkeste değişir).'}</p></section></div>`
+  return h + `</div><p class="msg" style="margin:14px 0 40px">${solo() ? 'Bir bölüme dokunursan sen o bölümden devam edersin (sadece bu telefonda).' : '❗ olan bölümler senin okumadıklarındır; dokunup okuyabilirsin. Diğer bölümlere dokunursan halka o bölümden devam eder (herkeste değişir).'}</p></section></div>`
 }
 
 function isOwner() { return !!(S.user && S.user.emailVerified && S.user.email === OWNER) }
@@ -279,6 +309,7 @@ function animate(b, names) {
 const store = {
   async setSess(b, full) { if (S.demo) { S.sess[b] = full; ls.set('halka-demo-sess', S.sess); render(true); return } const { doc, setDoc } = S.fs; await setDoc(doc(S.fs.db, 'sessions', b), full) },
   async setDone(b, n, v) { if (S.demo) { const s = sess(b); S.sess[b] = { ...s, done: { ...(s.done || {}), [n]: v } }; ls.set('halka-demo-sess', S.sess); render(true); return } const { doc, updateDoc, FieldPath } = S.fs; await updateDoc(doc(S.fs.db, 'sessions', b), new FieldPath('done', n), v) },
+  async addHist(b, i, names) { if (S.demo) { ls.set('halka-demo-hist', S.hist); return } const { doc, setDoc, arrayUnion } = S.fs; await setDoc(doc(S.fs.db, 'sessions', '_h_' + b), { [String(i)]: arrayUnion(...names) }, { merge: true }) },
   async setPeople(P) { if (S.demo) { S.people = P; ls.set('halka-demo-people', P); render(true); return } const { doc, setDoc } = S.fs; await setDoc(doc(S.fs.db, 'group', 'people'), { names: P }) }
 };
 let wq = Promise.resolve();
@@ -294,7 +325,7 @@ function render(force) {
   const y = window.scrollY; let h;
   if (!S.demo && (!S.authReady)) { $('#app').innerHTML = `<div class="hero"><div class="wrap"><div><h1>Okuma Halkası</h1><p>Yükleniyor…</p></div></div></div>`; return }
   if (!S.demo && (!S.user || !S.user.emailVerified || S.denied)) { if (!force && a && /^(aemail|apass)$/.test(a.id)) return; $('#app').innerHTML = loginView(); bindLogin(); return }
-  if (v.startsWith('kaynak-')) h = sessionView(v.slice(7)); else if (v.startsWith('icerik-')) h = contentsView(v.slice(7));
+  if (v.startsWith('telafi-')) h = catchupView(v.slice(7)); else if (v.startsWith('kaynak-')) h = sessionView(v.slice(7)); else if (v.startsWith('icerik-')) h = contentsView(v.slice(7));
   else if (v === 'kuran') h = quranView(); else if (v === 'mealler' || v.startsWith('mealler-')) h = mealView(v.slice(8));
   else if (v.startsWith('kat-')) h = catView(v.slice(4));
   else if (v === 'kisiler') h = usersView(); else if (v === 'yukle') h = uploadView(); else if (v === 'notlar') h = notesView(); else h = home();
@@ -317,13 +348,18 @@ function bind() {
     });
     document.querySelectorAll('[data-done]').forEach(el => el.onclick = () => { const n = el.dataset.done, val = !(sess(b).done || {})[n]; const s = sess(b); S.sess = { ...S.sess, [b]: { ...s, done: { ...(s.done || {}), [n]: val } } }; render(true); enqueue(() => store.setDone(b, n, val)) });
     $('#alldone') && ($('#alldone').onclick = () => writeSess(b, { done: Object.fromEntries(present(b).map(n => [n, true])) }));
-    $('#next') && ($('#next').onclick = () => { setPos(b, pos(b) + 1); window.scrollTo(0, 0) });
+    $('#next') && ($('#next').onclick = () => { if (!solo()) { const d = sess(b).done || {}; markRead(b, pos(b), present(b).filter(n => d[n])) } setPos(b, pos(b) + 1); window.scrollTo(0, 0) });
     $('#prev') && ($('#prev').onclick = () => setPos(b, pos(b) - 1));
     $('#savenote') && cur && ($('#savenote').onclick = () => {
       const t = ($('#note').value || '').trim(), N = notes(), k = noteKey(b, cur.idx);
       if (t) N[k] = { t: t.slice(0, 4000), at: Date.now(), book: b, idx: cur.idx }; else delete N[k];
       ls.set('halka-notes', N); $('#note').blur(); toast(t ? 'Not kaydedildi' : 'Not silindi')
     });
+  }
+  if (v.startsWith('telafi-')) {
+    const a = v.slice(7), k = a.lastIndexOf('-'), b = a.slice(0, k), i = +a.slice(k + 1), cur = list(b)[i];
+    $('#caught') && ($('#caught').onclick = () => { const m = me(); if (!m) return; markRead(b, i, [m]); const r = missed(b); location.hash = r.length ? `#telafi-${b}-${r[0]}` : `#kaynak-${b}`; toast('İşaretlendi ✓') });
+    $('#savenote') && cur && ($('#savenote').onclick = () => { const t = ($('#note').value || '').trim(), N = notes(), nk = noteKey(b, cur.idx); if (t) N[nk] = { t: t.slice(0, 4000), at: Date.now(), book: b, idx: cur.idx }; else delete N[nk]; ls.set('halka-notes', N); $('#note').blur(); toast(t ? 'Not kaydedildi' : 'Not silindi') });
   }
   if (v.startsWith('icerik-')) { const b = v.slice(7); document.querySelectorAll('[data-goto]').forEach(el => el.onclick = () => setPos(b, +el.dataset.goto)) }
   if (v === 'notlar' && $('#copynotes')) $('#copynotes').onclick = async () => {
@@ -381,9 +417,9 @@ async function afterLogin() {
   catch (e) { if (e && e.code === 'permission-denied') { S.denied = true; render(true); return } console.error(e) }
   unsubs.forEach(f => f()); unsubs = [];
   unsubs.push(fs.onSnapshot(fs.collection(db, 'sessions'), snap => {
-    const m = {}; snap.forEach(d => { const x = d.data() || {}; m[d.id] = { pos: Number(x.pos) || 0, present: Array.isArray(x.present) ? x.present.map(String) : undefined, reader: x.reader ? String(x.reader) : null, spin: Number(x.spin) || 0, done: x.done && typeof x.done === 'object' ? x.done : {} } });
+    const m = {}; const H = {}; snap.forEach(d => { const x = d.data() || {}; if (d.id.startsWith('_h_')) { const o = {}; for (const k in x) if (Array.isArray(x[k])) o[k] = x[k].map(String); H[d.id.slice(3)] = o; return } m[d.id] = { pos: Number(x.pos) || 0, present: Array.isArray(x.present) ? x.present.map(String) : undefined, reader: x.reader ? String(x.reader) : null, spin: Number(x.spin) || 0, done: x.done && typeof x.done === 'object' ? x.done : {} } });
     const fresh = []; for (const b in m) { const sp = m[b].spin; if (sp && m[b].reader && S.seen[b] !== undefined && S.seen[b] !== sp) fresh.push(b); S.seen[b] = sp }
-    S.sess = m; render(); for (const b of fresh) if (view() === 'kaynak-' + b) animate(b, present(b))
+    S.sess = m; S.hist = H; render(); for (const b of fresh) if (view() === 'kaynak-' + b) animate(b, present(b))
   }, e => { console.error(e); if (e.code === 'permission-denied') { S.denied = true; render(true) } }));
   unsubs.push(fs.onSnapshot(fs.doc(db, 'group', 'people'), d => { const x = d.exists() ? d.data() : null; S.people = x && Array.isArray(x.names) ? x.names.map(String).filter(Boolean) : null; render() }, e => console.error(e)));
   render(true)
@@ -391,7 +427,7 @@ async function afterLogin() {
 (async () => {
   render(true);
   try { await loadContent() } catch (e) { toast('Metinler yüklenemedi; internet bağlantını kontrol et.') }
-  if (S.demo) { S.sess = ls.get('halka-demo-sess', {}); S.people = ls.get('halka-demo-people', null) }
+  if (S.demo) { S.hist = ls.get('halka-demo-hist', {}); S.sess = ls.get('halka-demo-sess', {}); S.people = ls.get('halka-demo-people', null) }
   S.loaded = true; render(true);
   if (!S.demo) { try { await startFirebase() } catch (e) { console.error(e); S.authReady = true; toast('Firebase bağlantısı kurulamadı; internet bağlantını kontrol et.'); render(true) } }
 })();
