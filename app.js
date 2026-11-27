@@ -97,6 +97,68 @@ function hijri() { try { return new Intl.DateTimeFormat('tr-TR-u-ca-islamic', { 
 function topbar(href, label) { return `<div class="top"><div class="wrap"><a class="back" href="${href}"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M15 5l-7 7 7 7"/></svg>${esc(label)}</a></div></div>` }
 const demoBar = () => S.demo ? `<div class="demo">Deneme modu: Firebase ayarı girilmediği için kayıtlar sadece bu cihazda tutuluyor.</div>` : '';
 
+
+/* ---------- Isparta ezan vakitleri ve bildirim (Android) ---------- */
+// Isparta vakitleri (Diyanet yöntemi: fecr 18°, işa 17°, Şafii ikindi, temkin: güneş -7, öğle +5, ikindi +4, akşam +7)
+function vakitler(y, m, d, lat = 37.7648, lng = 30.5566, tz = 3) {
+  const D = Math.PI / 180, sin = x => Math.sin(x * D), cos = x => Math.cos(x * D), tan = x => Math.tan(x * D);
+  const asin = x => Math.asin(x) / D, acos = x => Math.acos(x) / D, atan2 = (a, b) => Math.atan2(a, b) / D, fix = (a, b) => { a = a - b * Math.floor(a / b); return a < 0 ? a + b : a };
+  if (m <= 2) { y -= 1; m += 12 } const A = Math.floor(y / 100), B = 2 - A + Math.floor(A / 4);
+  const jd0 = Math.floor(365.25 * (y + 4716)) + Math.floor(30.6001 * (m + 1)) + d + B - 1524.5 - lng / 360;
+  const sun = t => { const j = jd0 + t / 24 - 2451545, g = fix(357.529 + 0.98560028 * j, 360), q = fix(280.459 + 0.98564736 * j, 360), L = fix(q + 1.915 * sin(g) + 0.020 * sin(2 * g), 360), e = 23.439 - 0.00000036 * j, RA = fix(atan2(cos(e) * sin(L), cos(L)) / 15, 24); return { decl: asin(sin(e) * sin(L)), eqt: q / 15 - RA } };
+  const noon = t => fix(12 - sun(t).eqt, 24), at = (ang, t, ccw) => { const s = sun(t), z = noon(t), v = acos((-sin(ang) - sin(s.decl) * sin(lat)) / (cos(s.decl) * cos(lat))) / 15; return z + (ccw ? -v : v) };
+  const asr = t => { const s = sun(t); return at(-Math.atan(1 / (1 + tan(Math.abs(lat - s.decl)))) / D, t) };
+  let T = [5, 6, 12, 13, 18, 18].map(h => h / 24);
+  for (let k = 0; k < 2; k++) T = [at(18, T[0] * 24, 1), at(0.833, T[1] * 24, 1), noon(T[2] * 24), asr(T[3] * 24), at(0.833, T[4] * 24), at(17, T[5] * 24)].map(h => h / 24);
+  const adj = [0, -7, 5, 4, 7, 0];
+  return T.map((t, i) => { const mins = Math.round((t * 24 + tz - lng / 15) * 60 + adj[i]); return String(Math.floor(mins / 60)).padStart(2, '0') + ':' + String(mins % 60).padStart(2, '0') })
+}
+const VAKIT = ['İmsak', 'Güneş', 'Öğle', 'İkindi', 'Akşam', 'Yatsı'];
+const bugunVakit = () => { const t = new Date(); return vakitler(t.getFullYear(), t.getMonth() + 1, t.getDate()) };
+const isNative = () => !!(window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform());
+const ezanMode = () => ls.get('halka-ezan', 'kapali');
+let LNp = null;
+async function lnPlugin() { if (!isNative()) return null; if (!LNp) LNp = import('./cap-core.js').then(m => m.registerPlugin('LocalNotifications')).catch(e => { console.error(e); return null }); return LNp }
+async function loadVecize() {
+  if (S.demo || !S.fs) return; try { const { doc, getDoc } = S.fs, d = await getDoc(doc(S.fs.db, 'content', '_vecize')); if (d.exists() && Array.isArray(d.data().items)) ls.set('halka-vecize', d.data().items) } catch (e) { console.error(e) }
+}
+function vecizeMetni(i) {
+  const P = ls.get('halka-vecize', []); if (!P.length) return { kisa: 'Namaz vakti girdi.', uzun: 'Namaz vakti girdi.' };
+  const x = P[i % P.length], bas = x.y === 'a' ? 'Âyet-i kerîme' : 'Hadîs-i şerîf';
+  return { kisa: `“${x.t}”`, uzun: `“${x.t}”\n— ${bas} (${x.k})` }
+}
+async function ezanPlanla(sor) {
+  const LN = await lnPlugin(); if (!LN) return;
+  try {
+    const p = await LN.getPending(); if (p.notifications && p.notifications.length) await LN.cancel({ notifications: p.notifications.map(n => ({ id: n.id })) });
+    const mode = ezanMode(); if (mode === 'kapali') return;
+    let perm = await LN.checkPermissions(); if (perm.display !== 'granted' && sor) perm = await LN.requestPermissions();
+    if (perm.display !== 'granted') { if (sor) toast('Bildirim izni verilmedi; telefon ayarlarından açabilirsin.'); return }
+    try { const ex = await LN.checkExactNotificationSetting(); if (ex.exact_alarm !== 'granted' && sor) await LN.changeExactNotificationSetting() } catch (e) { }
+    await LN.createChannel({ id: 'ezan-ney', name: 'Ezan vakti (ney sesi)', description: 'Isparta ezan vakitleri', importance: 4, sound: 'ney.wav', vibration: true, visibility: 1 });
+    await LN.createChannel({ id: 'ezan-normal', name: 'Ezan vakti (bildirim sesi)', description: 'Isparta ezan vakitleri', importance: 4, vibration: true, visibility: 1 });
+    const P = ls.get('halka-vecize', []), ord = P.map((_, i) => i), r = rng(Date.now() & 0x7fffffff);
+    for (let i = ord.length - 1; i > 0; i--) { const j = Math.floor(r() * (i + 1)); [ord[i], ord[j]] = [ord[j], ord[i]] }
+    const list = [], now = Date.now(); let k = 0;
+    for (let g = 0; g < 25; g++) {
+      const d = new Date(); d.setHours(0, 0, 0, 0); d.setDate(d.getDate() + g);
+      const V = vakitler(d.getFullYear(), d.getMonth() + 1, d.getDate());
+      [0, 2, 3, 4, 5].forEach(i => {
+        const [h, m] = V[i].split(':').map(Number), at = new Date(d); at.setHours(h, m, 0, 0); if (+at <= now + 30000) return;
+        const v = vecizeMetni(ord.length ? ord[k++ % ord.length] : 0), ad = i === 0 ? 'Sabah (İmsak)' : VAKIT[i];
+        list.push({ id: (d.getFullYear() % 100) * 100000 + (d.getMonth() + 1) * 1000 + d.getDate() * 10 + i, title: `${ad} vakti · ${V[i]}`, body: v.kisa, largeBody: v.uzun, summaryText: 'Okuma Halkası', channelId: mode === 'ney' ? 'ezan-ney' : 'ezan-normal', smallIcon: 'ic_stat_halka', iconColor: '#1d3485', schedule: { at, allowWhileIdle: true } })
+      })
+    }
+    await LN.schedule({ notifications: list }); if (sor) toast(`${list.length} vakit bildirimi kuruldu (25 gün)`)
+  } catch (e) { console.error(e); if (sor) toast('Bildirim kurulamadı: ' + (e.message || e)) }
+}
+function ezanKart() {
+  const V = bugunVakit(), m = ezanMode();
+  return `<section><div class="card"><div class="row"><h3>🕌 Isparta vakitleri</h3><span class="msg" style="margin-left:auto">bugün</span></div>
+  <div class="vakit">${V.map((t, i) => `<div><small>${VAKIT[i]}</small><b>${t}</b></div>`).join('')}</div>
+  ${isNative() ? `<p class="msg" style="margin:10px 0 4px">Ezan vakti bildirimi (vakit girince bir âyet ya da hadis ile)</p><div class="seg ezan">${[['kapali', 'Kapalı'], ['ney', '🎵 Ney sesi'], ['normal', '🔔 Bildirim sesi']].map(([k, t]) => `<button data-ezan="${k}" class="${m === k ? 'on' : ''}">${t}</button>`).join('')}</div>` : `<p class="msg" style="margin:10px 0 0">Ezan vakti bildirimleri Android uygulamasında çalışır.</p>`}</div></section>`
+}
+
 /* ---------- ana menü ---------- */
 function home() {
   const P = people(), m = me(), d = new Date().toLocaleDateString('tr-TR', { weekday: 'long', day: 'numeric', month: 'long' });
@@ -106,6 +168,7 @@ function home() {
   if (active.length && !solo()) h += `<section><h2>Şu an okunanlar</h2><p class="sub">Okuyucusu seçilmiş, devam eden bölümler</p>${active.map(id => `<a class="card" href="#kaynak-${esc(id)}"><div class="row"><span class="chip">${esc(getBook(id).t)}</span><span class="msg">Okuyan: ${esc(sess(id).reader)}</span></div></a>`).join('')}</section>`;
   const miss = solo() ? [] : Object.keys(S.hist).map(id => [id, missed(id)]).filter(([id, M]) => M.length && getBook(id));
   if (miss.length) h += `<section><h2>Eksiklerim</h2><p class="sub">Halkada olmadığın gün okunan bölümler</p>${miss.map(([id, M]) => `<a class="card" href="#telafi-${esc(id)}-${M[0]}"><div class="row"><span class="chip">${esc(getBook(id).t)}</span><span class="msg no" style="font-weight:700">❗ ${M.length} bölüm</span></div></a>`).join('')}</section>`;
+  h += ezanKart();
   h += `<section><h2>Başlıklar</h2><p class="sub">${solo() ? 'Tek başına okuyorsun; ilerlemen sadece bu telefonda tutulur.' : 'Herkes aynı yeri açar; kaldığınız bölüm oradadır.'}</p><div class="cats">${S.cats.map((c, i) => `<a class="cat" style="background:${CATCOL[i % CATCOL.length]}" href="${c.id === 'kuran' ? '#kuran' : '#kat-' + esc(c.id)}"><h3>${esc(c.t)}</h3><p>${esc(c.a)}</p></a>`).join('')}</div></section>
   <section><a class="card" href="#notlar"><h3>Notlarım</h3><p class="msg">${Object.keys(notes()).length} not · sadece bu telefonda, kimse göremez</p></a>
   <a class="card" href="#kisiler"><div class="row"><span class="avs">${P.map(av).join('')}</span><h3 style="margin-left:4px">Kullanıcıları yönet</h3></div><p class="msg">Halkaya kişi ekle veya çıkar.</p></a></section>
@@ -338,6 +401,7 @@ function bind() {
   const v = view();
   $('#totr') && ($('#totr').onclick = () => { location.hash = '#kat-tefsirler' });
   const qf = $('#qfilter'); if (qf) qf.oninput = () => { S.qfilter = qf.value; const pos0 = qf.selectionStart; render(true); const n = $('#qfilter'); n.focus(); n.setSelectionRange(pos0, pos0) };
+  document.querySelectorAll('[data-ezan]').forEach(el => el.onclick = () => { ls.set('halka-ezan', el.dataset.ezan); render(true); ezanPlanla(true) });
   document.querySelectorAll('[data-mode]').forEach(el => el.onclick = () => { ls.set('halka-mode', el.dataset.mode); render(true) });
   $('#mesel') && ($('#mesel').onchange = e => { ls.set('halka-me', e.target.value); render(true) });
   if (v.startsWith('kaynak-')) {
@@ -424,6 +488,7 @@ async function afterLogin() {
     const fresh = []; for (const b in m) { const sp = m[b].spin; if (sp && m[b].reader && S.seen[b] !== undefined && S.seen[b] !== sp) fresh.push(b); S.seen[b] = sp }
     S.sess = m; S.hist = H; render(); for (const b of fresh) if (view() === 'kaynak-' + b) animate(b, present(b))
   }, e => { console.error(e); if (e.code === 'permission-denied') { S.denied = true; render(true) } }));
+  loadVecize().then(() => ezanPlanla(false));
   unsubs.push(fs.onSnapshot(fs.doc(db, 'group', 'people'), d => { const x = d.exists() ? d.data() : null; S.people = x && Array.isArray(x.names) ? x.names.map(String).filter(Boolean) : null; render() }, e => console.error(e)));
   render(true)
 }
