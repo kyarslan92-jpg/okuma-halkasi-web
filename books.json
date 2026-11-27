@@ -96,7 +96,8 @@
    "a": "Elmalılı M. Hamdi Yazır",
    "remote": true,
    "ar": "حق",
-   "c": "#1d3485"
+   "c": "#1d3485",
+   "start": 132
   },
   {
    "id": "ruhulbeyan",
@@ -114,7 +115,8 @@
    "a": "M. Ali es-Sâbûnî",
    "remote": true,
    "ar": "صفوة",
-   "c": "#8a5a14"
+   "c": "#8a5a14",
+   "start": 30
   },
   {
    "id": "riyaz",
@@ -123,7 +125,8 @@
    "a": "İmam Nevevî",
    "remote": true,
    "ar": "رياض",
-   "c": "#2f7d32"
+   "c": "#2f7d32",
+   "start": 2
   },
   {
    "id": "ilmihal",
@@ -132,7 +135,8 @@
    "a": "Ömer Nasuhi Bilmen",
    "remote": true,
    "ar": "علم حال",
-   "c": "#5b3f9e"
+   "c": "#5b3f9e",
+   "start": 6
   },
   {
    "id": "ihya",
@@ -141,7 +145,8 @@
    "a": "İmam Gazâlî · 40 kitap",
    "remote": true,
    "ar": "إحياء",
-   "c": "#d9534f"
+   "c": "#d9534f",
+   "start": 14
   },
   {
    "id": "delail",
@@ -151,7 +156,8 @@
    "questions": false,
    "remote": true,
    "ar": "دلائل",
-   "c": "#b04a8c"
+   "c": "#b04a8c",
+   "start": 1
   },
   {
    "id": "yasin",
