@@ -23,7 +23,7 @@ function getBook(id) {
   if (m && S.quran) { const su = S.quran.surahs[+m[1] - 1]; if (!su) return null; return { id, t: su.t + ' Sûresi', a: "Kur'an-ı Kerim · Arapça", questions: false, quranAr: su.n, q: 'ar', n: su.n, back: '#kuran' } }
   m = /^meal-([a-z0-9]+)-(\d{3})$/.exec(id);
   if (m && S.quran) { const su = S.quran.surahs[+m[2] - 1], ed = S.quran.meals.find(x => x.id === m[1]); if (!su || !ed) return null; return { id, t: su.t + ' Sûresi meali', a: ed.t, file: `content/quran/${m[1]}/${m[2]}.json`, q: 'meal', n: su.n, back: '#mealler-' + m[2] } }
-  const b = S.books.find(x => x.id === id); return b ? { ...b, file: `content/${b.id}.json`, back: '#kat-' + b.cat } : null
+  const b = S.books.find(x => x.id === id); return b ? { ...b, file: `${b.id}.json`, back: '#kat-' + b.cat } : null
 }
 const BK = () => new Proxy({}, { get: (_, id) => getBook(String(id)) || undefined });
 function list(b) { if (!(b in S.pass)) loadBook(b); return S.pass[b] || [] }
@@ -38,7 +38,7 @@ async function loadBook(id) {
       S.pass[id] = new Array(S.meta[id].count); render(); return
     }
     let j;
-    if (B.quranAr) { if (!S.quranAr) S.quranAr = fetch('content/quran/ar.json?v=' + VER).then(r => r.json()); j = { sections: (await S.quranAr)[B.quranAr] || [] } }
+    if (B.quranAr) { if (!S.quranAr) S.quranAr = fetch('quran-ar.json?v=' + VER).then(r => r.json()); j = { sections: (await S.quranAr)[B.quranAr] || [] } }
     else j = await (await fetch(B.file + '?v=' + VER)).json();
     S.pass[id] = (j.sections || []).map((x, i) => mapSec(B, id, x, i)).sort((a, c) => a.idx - c.idx)
   } catch (e) { console.error(e); S.pass[id] = [] }
@@ -348,9 +348,9 @@ addEventListener('hashchange', () => { render(true); window.scrollTo(0, 0) });
 
 /* ---------- açılış ---------- */
 async function loadContent() {
-  const j = await (await fetch('content/books.json?v=' + VER)).json();
+  const j = await (await fetch('books.json?v=' + VER)).json();
   S.cats = j.cats || []; S.books = j.books || [];
-  try { S.quran = await (await fetch('content/quran/index.json?v=' + VER)).json() } catch (e) { S.quran = null }
+  try { S.quran = await (await fetch('quran-index.json?v=' + VER)).json() } catch (e) { S.quran = null }
 }
 let unsubs = [];
 async function startFirebase() {

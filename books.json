@@ -1,0 +1,175 @@
+{
+ "cats": [
+  {
+   "id": "kuran",
+   "t": "Kur'an-ı Kerim",
+   "a": "Sûreler · Arapça okuma, Türkçe için tefsir",
+   "ar": "القرآن"
+  },
+  {
+   "id": "peygamber",
+   "t": "Peygamberimiz (s.a.v.)",
+   "a": "Hayatı, mucizeleri, kıssalar, hilye, Veda Hutbesi",
+   "ar": "ﷺ"
+  },
+  {
+   "id": "kitaplar",
+   "t": "Kitaplar",
+   "a": "Hadis, ilmihal, ahlâk, dualar",
+   "ar": "كتب"
+  },
+  {
+   "id": "tefsirler",
+   "t": "Tefsirler",
+   "a": "Elmalılı Hamdi Yazır, Rûhu'l-Beyân, Safvetü't-Tefâsîr",
+   "ar": "تفسير"
+  }
+ ],
+ "books": [
+  {
+   "id": "p_hayat",
+   "cat": "peygamber",
+   "t": "Hayatı (sade anlatım)",
+   "a": "Siyer-i Nebî",
+   "remote": true,
+   "ar": "سيرة",
+   "c": "#1d3485"
+  },
+  {
+   "id": "p_hayatdetay",
+   "cat": "peygamber",
+   "t": "Hayatı (kaynaklı, detaylı)",
+   "a": "Yıl yıl, kaynaklarıyla",
+   "remote": true,
+   "ar": "السيرة",
+   "c": "#16296b"
+  },
+  {
+   "id": "p_mucize",
+   "cat": "peygamber",
+   "t": "Mucizeleri",
+   "a": "el-Hasâisü'l-Kübrâ",
+   "remote": true,
+   "ar": "معجزات",
+   "c": "#0f8f8a"
+  },
+  {
+   "id": "p_kissa",
+   "cat": "peygamber",
+   "t": "Kıssalar",
+   "a": "Resûlullah'tan (s.a.v.) kıssalar",
+   "remote": true,
+   "ar": "قصص",
+   "c": "#8a5a14"
+  },
+  {
+   "id": "p_kronoloji",
+   "cat": "peygamber",
+   "t": "Asr-ı Saadet Kronolojisi",
+   "a": "Yıllara göre",
+   "remote": true,
+   "ar": "تاريخ",
+   "c": "#5b3f9e"
+  },
+  {
+   "id": "p_hilye",
+   "cat": "peygamber",
+   "t": "Hilye-i Şerif",
+   "a": "Şemâil",
+   "remote": true,
+   "ar": "حلية",
+   "c": "#b04a8c"
+  },
+  {
+   "id": "p_veda",
+   "cat": "peygamber",
+   "t": "Veda Hutbesi",
+   "a": "9 Zilhicce 10 H.",
+   "remote": true,
+   "ar": "الوداع",
+   "c": "#2f7d32"
+  },
+  {
+   "id": "elmalili",
+   "cat": "tefsirler",
+   "t": "Hak Dini Kur'an Dili",
+   "a": "Elmalılı M. Hamdi Yazır",
+   "remote": true,
+   "ar": "حق",
+   "c": "#1d3485"
+  },
+  {
+   "id": "ruhulbeyan",
+   "cat": "tefsirler",
+   "t": "Rûhu'l-Beyân",
+   "a": "İsmâil Hakkı Bursevî · Sâbûnî ihtisarı",
+   "remote": true,
+   "ar": "روح البيان",
+   "c": "#0f8f8a"
+  },
+  {
+   "id": "safvet",
+   "cat": "tefsirler",
+   "t": "Safvetü't-Tefâsîr",
+   "a": "M. Ali es-Sâbûnî",
+   "remote": true,
+   "ar": "صفوة",
+   "c": "#8a5a14"
+  },
+  {
+   "id": "riyaz",
+   "cat": "kitaplar",
+   "t": "Riyâzü's-Sâlihîn",
+   "a": "İmam Nevevî",
+   "remote": true,
+   "ar": "رياض",
+   "c": "#2f7d32"
+  },
+  {
+   "id": "ilmihal",
+   "cat": "kitaplar",
+   "t": "Büyük İslam İlmihali",
+   "a": "Ömer Nasuhi Bilmen",
+   "remote": true,
+   "ar": "علم حال",
+   "c": "#5b3f9e"
+  },
+  {
+   "id": "ihya",
+   "cat": "kitaplar",
+   "t": "İhyâu Ulûmi'd-Dîn",
+   "a": "İmam Gazâlî · 40 kitap",
+   "remote": true,
+   "ar": "إحياء",
+   "c": "#d9534f"
+  },
+  {
+   "id": "delail",
+   "cat": "kitaplar",
+   "t": "Delâilü'l-Hayrât",
+   "a": "İmam Cezûlî",
+   "questions": false,
+   "remote": true,
+   "ar": "دلائل",
+   "c": "#b04a8c"
+  },
+  {
+   "id": "yasin",
+   "cat": "kitaplar",
+   "t": "Yâsîn-i Şerif",
+   "a": "Yâsîn sûresi ve dualar",
+   "ar": "يس",
+   "c": "#16296b",
+   "alias": "sure-036"
+  },
+  {
+   "id": "hatim",
+   "cat": "kitaplar",
+   "t": "Hatim Duası",
+   "a": "Dua",
+   "questions": false,
+   "ar": "ختم",
+   "c": "#0f8f8a"
+  }
+ ]
+}
