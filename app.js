@@ -61,12 +61,15 @@ const VER = Date.now();
 const sess = b => S.sess[b] || {};
 const solo = () => ls.get('halka-mode', 'grup') === 'tek';
 const soloPos = () => ls.get('halka-solo-pos', {});
-const pos = b => Math.max(0, Number(solo() ? soloPos()[b] : sess(b).pos) || 0);
+// giriş/önsöz bölümleri okunmuş sayılır: kayıt yoksa kitap "start" bölümünden başlar
+const startOf = b => Math.max(0, Number((getBook(b) || {}).start) || 0);
+const gpos = b => { const v = sess(b).pos; return v == null ? startOf(b) : Math.max(0, Number(v) || 0) };
+const pos = b => { if (!solo()) return gpos(b); const v = soloPos()[b]; return v == null ? startOf(b) : Math.max(0, Number(v) || 0) };
 function setPos(b, n) { n = Math.max(0, n); if (solo()) { const P = soloPos(); P[b] = n; ls.set('halka-solo-pos', P); render(true) } else writeSess(b, { pos: n, reader: null, spin: 0, done: {} }) }
 const modeSeg = () => `<div class="seg mode" role="tablist"><button data-mode="grup" class="${solo() ? '' : 'on'}" aria-selected="${!solo()}">👥 Halka ile oku</button><button data-mode="tek" class="${solo() ? 'on' : ''}" aria-selected="${solo()}">👤 Tek başıma oku</button></div>`;
 const hist = b => S.hist[b] || {};
 // grubun geçtiği bölümlerden bu kişinin okumadıkları (kaydı olan bölümler)
-const missed = b => { const m = me(), H = hist(b), p = Math.max(0, Number(sess(b).pos) || 0); if (!m) return []; return Object.keys(H).map(Number).filter(i => i < p && Array.isArray(H[i]) && !H[i].includes(m)).sort((a, c) => a - c) };
+const missed = b => { const m = me(), H = hist(b), p = gpos(b); if (!m) return []; return Object.keys(H).map(Number).filter(i => i < p && Array.isArray(H[i]) && !H[i].includes(m)).sort((a, c) => a - c) };
 function markRead(b, i, names) { if (!names.length) return; const H = { ...hist(b) }; H[i] = [...new Set([...(H[i] || []), ...names])]; S.hist = { ...S.hist, [b]: H }; render(true); enqueue(() => store.addHist(b, i, names)) }
 const present = b => { const s = sess(b), all = people(); return Array.isArray(s.present) ? s.present.filter(n => all.includes(n)) : all };
 const col = n => { let h = 0; for (const c of String(n)) h = (h * 31 + c.charCodeAt(0)) >>> 0; return COLORS[h % COLORS.length] };
@@ -314,7 +317,7 @@ const store = {
 };
 let wq = Promise.resolve();
 const enqueue = fn => (wq = wq.then(fn).catch(e => { console.error(e); toast('Kaydedilemedi; internet bağlantını kontrol et.') }));
-const full = (b, data) => ({ pos: Math.max(0, Number(sess(b).pos) || 0), present: present(b), reader: sess(b).reader || null, spin: Number(sess(b).spin) || 0, done: sess(b).done || {}, ...data });
+const full = (b, data) => ({ pos: gpos(b), present: present(b), reader: sess(b).reader || null, spin: Number(sess(b).spin) || 0, done: sess(b).done || {}, ...data });
 function writeSess(b, data) { const f = full(b, data); S.sess = { ...S.sess, [b]: f }; render(true); enqueue(() => store.setSess(b, f)) }
 
 /* ---------- çizim ve olaylar ---------- */
