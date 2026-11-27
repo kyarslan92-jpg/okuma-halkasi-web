@@ -59,7 +59,11 @@ async function ensureChunk(id, c) {
 function need(id, i) { const M = S.meta[id]; if (M) { const c = Math.floor(i / M.n); ensureChunk(id, c); if ((i % M.n) > M.n - 5) ensureChunk(id, c + 1) } }
 const VER = Date.now();
 const sess = b => S.sess[b] || {};
-const pos = b => Math.max(0, Number(sess(b).pos) || 0);
+const solo = () => ls.get('halka-mode', 'grup') === 'tek';
+const soloPos = () => ls.get('halka-solo-pos', {});
+const pos = b => Math.max(0, Number(solo() ? soloPos()[b] : sess(b).pos) || 0);
+function setPos(b, n) { n = Math.max(0, n); if (solo()) { const P = soloPos(); P[b] = n; ls.set('halka-solo-pos', P); render(true) } else writeSess(b, { pos: n, reader: null, spin: 0, done: {} }) }
+const modeSeg = () => `<div class="seg mode" role="tablist"><button data-mode="grup" class="${solo() ? '' : 'on'}" aria-selected="${!solo()}">👥 Halka ile oku</button><button data-mode="tek" class="${solo() ? 'on' : ''}" aria-selected="${solo()}">👤 Tek başıma oku</button></div>`;
 const present = b => { const s = sess(b), all = people(); return Array.isArray(s.present) ? s.present.filter(n => all.includes(n)) : all };
 const col = n => { let h = 0; for (const c of String(n)) h = (h * 31 + c.charCodeAt(0)) >>> 0; return COLORS[h % COLORS.length] };
 const av = n => `<span class="av" style="background:${col(n)}">${esc((String(n)[0] || '?').toLocaleUpperCase('tr'))}</span>`;
@@ -90,16 +94,17 @@ const demoBar = () => S.demo ? `<div class="demo">Deneme modu: Firebase ayarı g
 function home() {
   const P = people(), m = me(), d = new Date().toLocaleDateString('tr-TR', { weekday: 'long', day: 'numeric', month: 'long' });
   let h = demoBar() + `<div class="hero"><div class="wrap"><div><h1>Okuma Halkası</h1><p>${esc(d)}${hijri() ? ' · ' + esc(hijri()) : ''}</p><p>${P.map(esc).join(', ')}</p>
-  <label class="me">Bu telefon:<select id="mesel"><option value="">Seç</option>${P.map(n => `<option${n === m ? ' selected' : ''}>${esc(n)}</option>`).join('')}</select></label></div>${rosette(P.length)}</div></div><div class="wrap">`;
+  <label class="me">Bu telefon:<select id="mesel"><option value="">Seç</option>${P.map(n => `<option${n === m ? ' selected' : ''}>${esc(n)}</option>`).join('')}</select></label></div>${rosette(P.length)}${modeSeg()}</div></div><div class="wrap">`;
   const active = Object.keys(S.sess).filter(id => sess(id).reader && getBook(id)).slice(0, 4);
-  if (active.length) h += `<section><h2>Şu an okunanlar</h2><p class="sub">Okuyucusu seçilmiş, devam eden bölümler</p>${active.map(id => `<a class="card" href="#kaynak-${esc(id)}"><div class="row"><span class="chip">${esc(getBook(id).t)}</span><span class="msg">Okuyan: ${esc(sess(id).reader)}</span></div></a>`).join('')}</section>`;
-  h += `<section><h2>Başlıklar</h2><p class="sub">Herkes aynı yeri açar; kaldığınız bölüm oradadır.</p><div class="cats">${S.cats.map(c => `<a class="cat" href="${c.id === 'kuran' ? '#kuran' : c.id === 'mealler' ? '#mealler' : '#kat-' + esc(c.id)}"><div class="row" style="flex-wrap:nowrap">${emblem(c.ar, '#ffffff22', true)}<h3>${esc(c.t)}</h3></div><p class="msg" style="margin:4px 0 0">${esc(c.a)}</p></a>`).join('')}</div></section>
+  if (active.length && !solo()) h += `<section><h2>Şu an okunanlar</h2><p class="sub">Okuyucusu seçilmiş, devam eden bölümler</p>${active.map(id => `<a class="card" href="#kaynak-${esc(id)}"><div class="row"><span class="chip">${esc(getBook(id).t)}</span><span class="msg">Okuyan: ${esc(sess(id).reader)}</span></div></a>`).join('')}</section>`;
+  h += `<section><h2>Başlıklar</h2><p class="sub">${solo() ? 'Tek başına okuyorsun; ilerlemen sadece bu telefonda tutulur.' : 'Herkes aynı yeri açar; kaldığınız bölüm oradadır.'}</p><div class="cats">${S.cats.map((c, i) => `<a class="cat" style="background:${CATCOL[i % CATCOL.length]}" href="${c.id === 'kuran' ? '#kuran' : '#kat-' + esc(c.id)}"><h3>${esc(c.t)}</h3><p>${esc(c.a)}</p></a>`).join('')}</div></section>
   <section><a class="card" href="#notlar"><h3>Notlarım</h3><p class="msg">${Object.keys(notes()).length} not · sadece bu telefonda, kimse göremez</p></a>
   <a class="card" href="#kisiler"><div class="row"><span class="avs">${P.map(av).join('')}</span><h3 style="margin-left:4px">Kullanıcıları yönet</h3></div><p class="msg">Halkaya kişi ekle veya çıkar.</p></a></section>
   <p class="msg" style="margin:24px 0 36px">Okuyucu seçimi ve işaretler herkesin ekranında aynı anda görünür.</p></div>`;
   return h
 }
 
+const CATCOL = ['#1d3485', '#0f7f7a', '#7a4a12', '#4d3590'];
 const emblem = (ar, c, big) => `<span class="emb${big ? ' big' : ''}" style="background:${/^#[0-9a-f]{6}$/i.test(c || '') ? c : '#1d3485'}" lang="ar">${esc(ar || '')}</span>`;
 function catView(c) {
   const C = S.cats.find(x => x.id === c); if (!C) return home();
@@ -108,7 +113,7 @@ function catView(c) {
   for (const b0 of items) {
     const b = b0.alias && getBook(b0.alias) ? { ...b0, id: b0.alias } : b0;
     const L = list(b.id), p = Math.min(pos(b.id), L.length), s = sess(b.id), cur = L[p];
-    const st = !(b.id in S.pass) ? 'Yükleniyor…' : !L.length ? 'Metin henüz eklenmedi' : p >= L.length ? 'Tamamlandı' : s.reader ? `Okuyan: ${s.reader}` : `${cur ? cur.idx : p + 1}. bölüm sırada`;
+    const st = !(b.id in S.pass) ? 'Yükleniyor…' : !L.length ? 'Metin henüz eklenmedi' : p >= L.length ? 'Tamamlandı' : s.reader && !solo() ? `Okuyan: ${s.reader}` : `${cur ? cur.idx : p + 1}. bölüm sırada`;
     h += `<a class="book" href="#kaynak-${esc(b.id)}">${emblem(b0.ar, b0.c)}<h3>${esc(b.t)}</h3><small>${esc(b.a)}</small><small style="color:var(--lapis2);font-weight:600">${esc(st)}</small>${L.length ? `<small>${p}/${L.length} bölüm</small>` : ''}<div class="bar"><i style="width:${L.length ? Math.round(p / L.length * 100) : 0}%"></i></div></a>`
   }
   if (!items.length) h += `<div class="empty">Bu başlığın içeriği henüz eklenmedi.</div>`;
@@ -174,10 +179,18 @@ function sessionView(b) {
   const B = BK()[b]; if (!B) return home();
   const L = list(b), p = Math.min(pos(b), L.length), cur = L[p], s = sess(b), pr = present(b), all = people(), m = me();
   if (!(b in S.pass)) return topbar(B.back || '#ana', 'Geri') + `<div class="wrap"><section><div class="empty">Yükleniyor…</div></section></div>`;
-  let h = topbar(B.back || '#ana', 'Geri') + (B.q === 'ar' ? `<div class="wrap"><div class="seg" role="tablist"><button class="on" aria-selected="true">Arapça</button><button id="totr">Türkçe (tefsir)</button></div>` : '') + `<div class="wrap"><section style="padding-top:18px"><div class="row"><span class="chip">${esc(B.t)}</span><span class="msg">${cur ? cur.idx + '. bölüm' : ''} · ${p}/${L.length}</span><a class="msg" style="margin-left:auto" href="#icerik-${esc(b)}">Tüm bölümler</a></div>${B.q === 'meal' ? `<p class="msg" style="margin:6px 0 0">${esc(B.a)}</p>` : ''}`;
+  let h = topbar(B.back || '#ana', 'Geri') + (B.q === 'ar' ? `<div class="wrap"><div class="seg" role="tablist"><button class="on" aria-selected="true">Arapça</button><button id="totr">Türkçe (tefsir)</button></div>` : '') + `<div class="wrap">${modeSeg()}</div><div class="wrap"><section style="padding-top:6px"><div class="row"><span class="chip">${esc(B.t)}</span><span class="msg">${cur ? cur.idx + '. bölüm' : ''} · ${p}/${L.length}</span><a class="msg" style="margin-left:auto" href="#icerik-${esc(b)}">Tüm bölümler</a></div>${B.q === 'meal' ? `<p class="msg" style="margin:6px 0 0">${esc(B.a)}</p>` : ''}`;
   if (!cur && p < L.length) { need(b, p); return h + `<div class="empty" style="margin-top:16px">Bölüm yükleniyor…</div></section></div>` }
   need(b, p);
   if (!cur) return h + `<div class="empty" style="margin-top:16px">${L.length ? 'Bu kaynağın tüm bölümleri okundu. Allah kabul etsin.' : 'Bu kaynağa henüz metin eklenmedi.'}</div>${p > 0 ? `<button id="prev" class="small" style="margin-top:12px">← Son bölüme geri dön</button>` : ''}</section></div>`;
+  if (solo()) {
+    h += `<p class="msg" style="margin:8px 0 0">👤 Tek başına okuma · ilerlemen sadece bu telefonda</p>` + body(cur);
+    if (B.questions !== false && cur.q && cur.q.length) h += `<div class="step" style="margin-top:22px"><i>?</i>Kendine sor</div><ol class="qa">${cur.q.map(q => `<li>${esc(q)}</li>`).join('')}</ol>`;
+    const nk = noteKey(b, cur.idx), mine = (notes()[nk] || {}).t || '';
+    h += `<div class="step" style="margin-top:24px"><i>✎</i>Not ekle <span class="msg">(sadece sen görürsün)</span></div><textarea id="note" placeholder="Bu bölümden aklında kalan, sonra dönmek istediğin…">${esc(mine)}</textarea><button id="savenote" class="small" style="margin-top:8px">Notu kaydet</button>`;
+    h += `<button id="next" class="big primary" style="margin-top:20px">Okudum, sıradakine geç</button>`;
+    return h + `<div class="row" style="margin:26px 0 40px">${p > 0 ? `<button id="prev" class="small">← Önceki bölüme dön</button>` : ''}</div></section></div>`
+  }
   const done = s.done && typeof s.done === 'object' ? s.done : {}, allDone = pr.length > 0 && pr.every(n => done[n]);
   const noQ = B.questions === false, st = !s.reader ? 1 : allDone ? 3 : 2, an = S.anim[b];
   const stepH = (k, t) => `<div class="step ${st === k ? 'cur' : ''}"><i>${k}</i>${t}</div>`;
@@ -208,7 +221,7 @@ function contentsView(b) {
   let h = topbar('#kaynak-' + b, B.t) + `<div class="wrap"><section><h2>${esc(B.t)}</h2><p class="sub">${esc(B.a)} · ${L.length} bölüm · ${Math.min(p, L.length)} bölüm okundu</p><div class="list">`;
   L.forEach((x, i) => { h += `<a href="#kaynak-${esc(b)}" data-goto="${i}"><span class="num">${x.idx}</span><span class="t">${i === p ? '<span class="here">Sıradaki bölüm</span>' : ''}<div>${esc(x.title || x.text || (x.items && x.items[0] && x.items[0].tr) || '')}</div></span><span class="${i < p ? 'ok' : 'no'}">${i < p ? '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6"><path d="M5 12l5 5 9-10"/></svg>' : ''}</span></a>` });
   if (S.meta[b]) h += `<p class="msg">Büyük kitaplarda yalnızca kaldığınız yerin çevresindeki bölümler listelenir.</p>`;
-  return h + `</div><p class="msg" style="margin:14px 0 40px">Bir bölüme dokunursan halka o bölümden devam eder (herkeste değişir).</p></section></div>`
+  return h + `</div><p class="msg" style="margin:14px 0 40px">${solo() ? 'Bir bölüme dokunursan sen o bölümden devam edersin (sadece bu telefonda).' : 'Bir bölüme dokunursan halka o bölümden devam eder (herkeste değişir).'}</p></section></div>`
 }
 
 function isOwner() { return !!(S.user && S.user.emailVerified && S.user.email === OWNER) }
@@ -270,7 +283,7 @@ const store = {
 };
 let wq = Promise.resolve();
 const enqueue = fn => (wq = wq.then(fn).catch(e => { console.error(e); toast('Kaydedilemedi; internet bağlantını kontrol et.') }));
-const full = (b, data) => ({ pos: pos(b), present: present(b), reader: sess(b).reader || null, spin: Number(sess(b).spin) || 0, done: sess(b).done || {}, ...data });
+const full = (b, data) => ({ pos: Math.max(0, Number(sess(b).pos) || 0), present: present(b), reader: sess(b).reader || null, spin: Number(sess(b).spin) || 0, done: sess(b).done || {}, ...data });
 function writeSess(b, data) { const f = full(b, data); S.sess = { ...S.sess, [b]: f }; render(true); enqueue(() => store.setSess(b, f)) }
 
 /* ---------- çizim ve olaylar ---------- */
@@ -291,6 +304,7 @@ function bind() {
   const v = view();
   $('#totr') && ($('#totr').onclick = () => { location.hash = '#kat-tefsirler' });
   const qf = $('#qfilter'); if (qf) qf.oninput = () => { S.qfilter = qf.value; const pos0 = qf.selectionStart; render(true); const n = $('#qfilter'); n.focus(); n.setSelectionRange(pos0, pos0) };
+  document.querySelectorAll('[data-mode]').forEach(el => el.onclick = () => { ls.set('halka-mode', el.dataset.mode); render(true) });
   $('#mesel') && ($('#mesel').onchange = e => { ls.set('halka-me', e.target.value); render(true) });
   if (v.startsWith('kaynak-')) {
     const b = v.slice(7), L = list(b), cur = L[Math.min(pos(b), L.length)];
@@ -303,15 +317,15 @@ function bind() {
     });
     document.querySelectorAll('[data-done]').forEach(el => el.onclick = () => { const n = el.dataset.done, val = !(sess(b).done || {})[n]; const s = sess(b); S.sess = { ...S.sess, [b]: { ...s, done: { ...(s.done || {}), [n]: val } } }; render(true); enqueue(() => store.setDone(b, n, val)) });
     $('#alldone') && ($('#alldone').onclick = () => writeSess(b, { done: Object.fromEntries(present(b).map(n => [n, true])) }));
-    $('#next') && ($('#next').onclick = () => { writeSess(b, { pos: pos(b) + 1, reader: null, spin: 0, done: {} }); window.scrollTo(0, 0) });
-    $('#prev') && ($('#prev').onclick = () => writeSess(b, { pos: Math.max(0, pos(b) - 1), reader: null, spin: 0, done: {} }));
+    $('#next') && ($('#next').onclick = () => { setPos(b, pos(b) + 1); window.scrollTo(0, 0) });
+    $('#prev') && ($('#prev').onclick = () => setPos(b, pos(b) - 1));
     $('#savenote') && cur && ($('#savenote').onclick = () => {
       const t = ($('#note').value || '').trim(), N = notes(), k = noteKey(b, cur.idx);
       if (t) N[k] = { t: t.slice(0, 4000), at: Date.now(), book: b, idx: cur.idx }; else delete N[k];
       ls.set('halka-notes', N); $('#note').blur(); toast(t ? 'Not kaydedildi' : 'Not silindi')
     });
   }
-  if (v.startsWith('icerik-')) { const b = v.slice(7); document.querySelectorAll('[data-goto]').forEach(el => el.onclick = () => writeSess(b, { pos: +el.dataset.goto, reader: null, spin: 0, done: {} })) }
+  if (v.startsWith('icerik-')) { const b = v.slice(7); document.querySelectorAll('[data-goto]').forEach(el => el.onclick = () => setPos(b, +el.dataset.goto)) }
   if (v === 'notlar' && $('#copynotes')) $('#copynotes').onclick = async () => {
     const N = notes(), B = BK(); const txt = Object.values(N).map(n => `${(B[n.book] || {}).t || n.book} — ${n.idx}. bölüm\n${n.t}`).join('\n\n');
     try { await navigator.clipboard.writeText(txt); toast('Notlar kopyalandı') } catch (e) { toast('Kopyalanamadı') }
